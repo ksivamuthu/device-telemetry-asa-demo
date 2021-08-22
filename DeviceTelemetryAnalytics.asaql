@@ -1,0 +1,85 @@
+WITH ProcessedTelemetry as (
+    SELECT
+        deviceId, 
+        System.timestamp() as time,
+        AVG(temp) as temp,
+        CASE WHEN AVG(temp) > 80 THEN 1 ELSE 0 END as hasAlert
+    FROM
+        [deviceTelemetry] TIMESTAMP BY time
+    GROUP BY 
+        System.Timestamp(), deviceId -- Run immediately on every event
+),
+TelemetryWithLastAlert as (
+    SELECT
+        deviceId, 
+        time,
+        temp,
+        hasAlert,
+        LAG(hasAlert) OVER (PARTITION BY deviceId LIMIT DURATION(day, 1)) as previousAlert        
+    FROM
+        ProcessedTelemetry        
+),
+TelemetryWithDuration as (
+    SELECT
+        deviceId, 
+        time,
+        temp,
+        hasAlert,
+        previousAlert,
+        DATEDIFF(second,LAST(time) OVER (PARTITION BY deviceId LIMIT DURATION(day, 1) WHEN hasAlert = 1 AND previousAlert = 0), time) as alertDuration
+    FROM
+        TelemetryWithLastAlert       
+),
+DeviceTelemetryFinal as (
+    SELECT
+        deviceId, 
+        time,
+        temp,
+        hasAlert,
+        previousAlert,
+        alertDuration,
+        LAG(alertDuration) OVER (PARTITION BY deviceId LIMIT DURATION(day, 1)) as previousAlertDuration
+    FROM
+        TelemetryWithDuration       
+),
+AlertEvents as (
+    SELECT 
+        deviceId, 
+        time, 
+        temp, 
+        hasAlert,
+        'alertRaised' as eventType
+    FROM
+        DeviceTelemetryFinal 
+    WHERE
+        hasAlert = 1 AND (previousAlert IS NULL OR previousAlert = 0)
+
+    UNION
+
+    SELECT 
+        deviceId, 
+        time, 
+        temp, 
+        hasAlert,
+        'alertCleared' as eventType
+    FROM
+        DeviceTelemetryFinal 
+    WHERE
+        hasAlert = 0 AND previousAlert = 1
+    
+    UNION
+
+    SELECT 
+        deviceId, 
+        time, 
+        temp, 
+        hasAlert,
+        'alertEscalated' as eventType
+    FROM
+        DeviceTelemetryFinal 
+    WHERE
+        hasAlert = 1 AND previousAlert = 1 and alertDuration >= 15 and previousAlertDuration < 15
+)
+
+SELECT * FROM DeviceTelemetryFinal
+SELECT *  INTO alertHub FROM AlertEvents

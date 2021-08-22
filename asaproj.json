@@ -1,0 +1,14 @@
+{
+    "name": "DeviceTelemetryAnalytics",
+    "startFile": "DeviceTelemetryAnalytics.asaql",
+    "configurations": [
+        {
+            "filePath": "JobConfig.json",
+            "subType": "JobConfig"
+        },
+        {
+            "filePath": "Inputs/Local_deviceTelemetry.json",
+            "subType": "InputMock"
+        }
+    ]
+}

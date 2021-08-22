@@ -1,0 +1,7 @@
+{
+    "InputAlias": "deviceTelemetry",
+    "Type": "Data Stream",
+    "Format": "Json",
+    "FilePath": "devicetelemetry.json",
+    "ScriptType": "InputMock"
+}
